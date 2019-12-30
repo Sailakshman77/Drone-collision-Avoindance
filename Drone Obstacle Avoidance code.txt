@@ -1,0 +1,150 @@
+#include<Servo.h>
+Servo aileron,elevator;
+
+/*	This Entire code is just 
+for areference and might not
+work on your drone since 
+I have used many constants 
+in the code which are obtained 
+as a result of calulations 
+done consedering the size 
+of my F250 drone and the 
+different parameters in 
+the Flight control board and 
+also reaction time of the 
+sensors as well of the 
+relative position of the sensors*/ 
+
+float globalduration;
+unsigned long timer[5];
+byte last_channel[3];
+int input[3];
+void setup() {
+  PCICR |= (1 << PCIE0);
+  PCMSK0 |= (1 << PCINT0);
+  PCMSK0 |= (1 << PCINT1);
+  Serial.begin(9600);
+  aileron.attach(5);
+  elevator.attach(6);
+  pinMode(7,OUTPUT); //trigger 1
+  pinMode(2,OUTPUT); // trigger 2
+  pinMode(3,OUTPUT);
+  pinMode(4,OUTPUT);
+  pinMode(8,INPUT);
+  pinMode(9,INPUT);
+  pinMode(10,INPUT);
+  pinMode(11,INPUT);
+  pinMode(12,INPUT);
+  pinMode(13,INPUT);
+}
+
+float ultraread(int echo, int trigger)
+{
+  float duration;
+  digitalWrite(trigger,LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigger,HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigger,LOW);
+  duration=pulseIn(echo, HIGH);
+  duration=duration/58.2;
+  return(duration);
+}
+void loop() {
+int left,right,front,back;
+int d1,d2,d3,d4;
+int temp,temp1,temp2,temp3;
+int i;
+temp=0;
+temp1=0;
+temp2=0;
+temp3=0;
+print();
+for(i=0;i<3;i++)    //Go Left
+{
+left = ultraread(10,7);
+temp=temp+left;
+}
+d1=temp/3;
+Serial.print(d1);
+Serial.print(" || ");
+
+for(int i=0;i<3;i++) //Go Right
+{
+right = ultraread(11,2);
+temp1=temp1+right;
+}
+d2=temp1/3;
+Serial.print(d2);
+Serial.print(" || ");
+
+for(int i=0;i<3;i++) //Go Front
+{
+front = ultraread(12,3);
+temp2=temp2+front;
+}
+d3=temp2/3;
+Serial.print(d3);
+Serial.print(" || ");
+for(int i=0;i<3;i++) //Go Back
+{
+back = ultraread(13,4);
+temp3=temp3+back;
+}
+d4=temp3/3;
+Serial.print(d4);
+Serial.println(" || ");
+
+ if((d1<40 || d2<40 || d3<40 || d4<40))
+ {  
+    if(((d3>=d4) && (d4<=40))) //Go Front
+    {
+     input[1]=(2128.05-(16.09*d4));
+    }
+    if(((d4>=d3) && (d3<=40))) //Go Back
+    {
+     //Serial.println("i'm inside");
+     input[1]=((10.90*d3)+913.5);
+    }
+    if(((d1>=d2) && (d2<=40))) //go Right
+    {   `                                
+     input[0]=(924.883+(12.5581*d2));
+    }
+    if(((d2>=d1) && (d1<=40))) //go Left
+    {
+     input[0]=(2044.65116-(12.3255*d1));
+
+    }
+ }
+  aileron.writeMicroseconds(input[0]);
+  elevator.writeMicroseconds(input[1]);
+
+}
+
+ISR(PCINT0_vect) {
+  timer[0] = micros();
+  // channel 1 ---------------
+  if(last_channel[0] == 0 && PINB & B00000001 ) {
+    last_channel[0] = 1;
+    timer[1] = timer[0];
+  }
+  else if(last_channel[0] == 1 && !(PINB & B00000001) ) {
+    last_channel[0] = 0;
+    input[0] = timer[0] - timer[1];
+  }
+  // channel 2 ---------------
+  if(last_channel[1] == 0 && PINB & B00000010 ) {
+    last_channel[1] = 1;
+    timer[2] = timer[0];
+  }
+  else if(last_channel[1] == 1 && !(PINB & B00000010) ) {
+    last_channel[1] = 0;
+    input[1] = timer[0] - timer[2];
+  }
+} 
+void print() {
+  Serial.print(input[1]);
+  Serial.print(" - ");
+  Serial.print(input[0]);
+  Serial.print(" - "); 
+}
